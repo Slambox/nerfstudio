@@ -469,7 +469,16 @@ class ExportCameraPoses(Exporter):
         if not self.output_dir.exists():
             self.output_dir.mkdir(parents=True)
 
-        _, pipeline, _, _ = eval_setup(self.load_config)
+        def update_config_callback(config):
+            # config.pipeline.datamanager.dataparser.eval_mode = "fraction"
+            # config.pipeline.datamanager.dataparser.train_split_fraction = 1.0
+            config.pipeline.datamanager.cache_images = "cpu"
+            return config
+
+        _, pipeline, _, _ = eval_setup(
+            self.load_config,
+            update_config_callback=update_config_callback,
+        )
         assert isinstance(pipeline, VanillaPipeline)
         train_frames, eval_frames = collect_camera_poses(pipeline)
 
