@@ -344,6 +344,8 @@ class Trainer:
 
         if not self.config.viewer.quit_on_train_completion:
             self._train_complete_viewer()
+        else:
+            self.shutdown()
 
     @check_main_thread
     def _check_viewer_warnings(self) -> None:

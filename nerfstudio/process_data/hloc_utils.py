@@ -23,6 +23,8 @@ import sys
 from pathlib import Path
 from typing import Literal
 
+from loguru import logger
+
 from nerfstudio.process_data.process_data_utils import CameraModel
 from nerfstudio.utils.rich_utils import CONSOLE
 
@@ -112,8 +114,10 @@ def run_hloc(
     references = [p.relative_to(image_dir).as_posix() for p in image_dir.iterdir()]
     extract_features.main(feature_conf, image_dir, image_list=references, feature_path=features)  # type: ignore
     if matching_method == "exhaustive":
+        logger.info("Using exhaustive matching")
         pairs_from_exhaustive.main(sfm_pairs, image_list=references)  # type: ignore
     else:
+        logger.info("Using retrieval-based matching")
         retrieval_path = extract_features.main(retrieval_conf, image_dir, outputs)  # type: ignore
         num_matched = min(len(references), num_matched)
         pairs_from_retrieval.main(retrieval_path, sfm_pairs, num_matched=num_matched)  # type: ignore
@@ -156,11 +160,10 @@ def run_hloc(
                 "ba_global_max_refinements": 3,
                 "ba_global_points_freq": 200000,
             }
-            CONSOLE.print(
-                f"[bold yellow]Using global bundle adjustment settings for large dataset ({len(references)} images)"
-            )
+            logger.info(f"Using global bundle adjustment settings for large dataset ({len(references)} images)")
 
         else:
+            logger.info("Using default bundle adjustment settings for small dataset")
             mapping_options = {}
 
         reconstruction.main(  # type: ignore
