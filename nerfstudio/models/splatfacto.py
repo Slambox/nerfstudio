@@ -20,10 +20,11 @@ Gaussian Splatting implementation that combines many recent advancements.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Literal, Optional, Tuple, Type, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Type, Union
 
 import torch
-from gsplat.strategy import DefaultStrategy, MCMCStrategy
+from gsplat.strategy import DefaultStrategy as BaseDefaultStrategy, MCMCStrategy
+from loguru import logger
 
 try:
     from gsplat.rendering import rasterization
@@ -79,6 +80,40 @@ def get_viewmat(optimized_camera_to_world):
     viewmat[:, :3, :3] = R_inv
     viewmat[:, :3, 3:4] = T_inv
     return viewmat
+
+
+@dataclass
+class DefaultStrategy(BaseDefaultStrategy):
+    max_gs_num: int = 1_000_000
+
+    @torch.no_grad()
+    def _grow_gs(
+        self,
+        params: Union[Dict[str, torch.nn.Parameter], torch.nn.ParameterDict],
+        optimizers: Dict[str, torch.optim.Optimizer],
+        state: Dict[str, Any],
+        step: int,
+    ) -> Tuple[int, int]:
+        # skip if we have too many GSs
+        if len(params["means"]) >= self.max_gs_num:
+            return 0, 0
+
+        # cut the grad threshold if we will exceed the max number of GSs
+        count = state["count"]
+        grads = state["grad2d"] / count.clamp_min(1)
+        is_grad_high = grads > self.grow_grad2d
+        while len(params["means"]) + is_grad_high.sum().item() > self.max_gs_num:
+            # logger.info(
+            #     f"Raising grad threshold from {self.grow_grad2d} \n"
+            #     f"to {self.grow_grad2d * 2} \n"
+            #     f"to avoid exceeding {self.max_gs_num} GSs \n"
+            #     f"is_grad_high.sum()={is_grad_high.sum().item()} \n"
+            #     f"len(params['means'])={len(params['means'])} "
+            # )
+            self.grow_grad2d = self.grow_grad2d * 2
+            is_grad_high = grads > self.grow_grad2d
+
+        return super()._grow_gs(params, optimizers, state, step)
 
 
 @dataclass
@@ -277,6 +312,7 @@ class SplatfactoModel(Model):
                 absgrad=self.config.use_absgrad,
                 revised_opacity=False,
                 verbose=True,
+                max_gs_num=self.config.max_gs_num,
             )
             self.strategy_state = self.strategy.initialize_state(scene_scale=1.0)
         elif self.config.strategy == "mcmc":
