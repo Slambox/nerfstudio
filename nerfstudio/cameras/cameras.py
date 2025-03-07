@@ -943,6 +943,7 @@ class Cameras(TensorDataclass):
         """
         flattened = self.flatten()
         times = flattened[camera_idx].times
+        distortion_params = flattened[camera_idx].distortion_params
         if times is not None:
             times = times.item()
         json_ = {
@@ -953,11 +954,14 @@ class Cameras(TensorDataclass):
             "cy": flattened[camera_idx].cy.item(),
             "fx": flattened[camera_idx].fx.item(),
             "fy": flattened[camera_idx].fy.item(),
-            "distortion_params": flattened[camera_idx].distortion_params.tolist(),
+            "distortion_params": distortion_params.tolist() if distortion_params is not None else None,
             "camera_to_world": self.camera_to_worlds[camera_idx].tolist(),
             "camera_index": camera_idx,
             "times": times,
         }
+        if distortion_params is not None:
+            json_["distortion_params"] = distortion_params.tolist()
+
         if image is not None:
             image_uint8 = (image * 255).detach().type(torch.uint8)
             if max_size is not None:
